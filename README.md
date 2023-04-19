@@ -3,11 +3,12 @@ Repository for RNA Structure Module (isolated from RosettaFoldNA), authors @Sid0
 
 This is an example:
 
-  python rf.py ./examples/1xjr.pdb
+    python rf.py ./examples/1xjr.pdb
 
 Full help:
 
-  (base) ➜  rf-structure-module git:(main) ✗ python rf.py  -h
+```
+python rf.py  -h
   usage: rf.py [-h] [-v] [--output OUTPUT] file
 
   positional arguments:
@@ -17,9 +18,10 @@ Full help:
     -h, --help       show this help message and exit
     -v, --verbose    be verbose
     --output OUTPUT
+```
 
 and I think you need biopython and PyTorch to run it
 (I’m testing dependencies right now in different environment to make sure )
 
-  pip3 install torch biopython
+    pip3 install torch biopython icecream
 
