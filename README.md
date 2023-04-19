@@ -23,5 +23,5 @@ python rf.py  -h
 and I think you need biopython and PyTorch to run it
 (I’m testing dependencies right now in different environment to make sure )
 
-    pip3 install torch biopython icecream
+    pip3 install torch==2.0.0 biopython icecream
 
