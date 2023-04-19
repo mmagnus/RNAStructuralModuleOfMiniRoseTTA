@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 from statistics import mode, mean, multimode
 import math
 import numpy as np
-import seaborn as sns
 from functools import reduce
 import torch
 import torch.nn as nn
