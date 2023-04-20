@@ -1,6 +1,31 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+"""
+alphas: x len of sequence::
+        tensor([[[[-0.4466, -0.8947], 
+                  [-0.2530,  0.9675],
+                  [-0.9160,  0.4012],
+                  [-0.8217, -0.5700],
+                  [-0.7891,  0.6143],
+                  [ 0.0082,  1.0000],
+                  [-0.6455,  0.7637],
+                  [ 0.9774,  0.2112],
+                  [ 0.8674, -0.4977],
+                  [-0.9995, -0.0301]],
+
+                 [[-0.6560, -0.7548],
+                  [ 0.2032, -0.9791],
+                 ...
+ alphas: torch.zeros((1,L,10,2), device=seq.device) # the 2 is for cos and sign components
+
+RTFX ::
+ tensor([[0., 0., 0., 0.],
+        [0., 0., 0., 0.],
+        [0., 0., 0., 0.],
+        [0., 0., 0., 0.]])
+"""
+
 from icecream import ic
 import sys
 from Bio.PDB import PDBParser
