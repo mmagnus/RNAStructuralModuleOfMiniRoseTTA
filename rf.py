@@ -542,42 +542,50 @@ class ComputeAllAtomCoords(torch.nn.Module):
                 'ij,jk,kl->il',
             RTF0[seq_i,:,:], self.RTs_in_base_frame[s_i,2,:], make_rotX_chi(alphas[:,:,2,:],seq_i)) 
 
+            if args.stop_arf == 1: continue
                 
             # NA beta 
             RTF2[seq_i,:,:] = torch.einsum(
                 'ij,jk,kl->il', 
                 RTF1[seq_i,:,:], self.RTs_in_base_frame[s_i,3,:], make_rotX_chi(alphas[:,:,3,:],seq_i))
+            if args.stop_arf == 2: continue
 
             # NA gamma
             RTF3[seq_i,:,:] = torch.einsum(
                 'ij,jk,kl->il', 
                 RTF2[seq_i,:,:], self.RTs_in_base_frame[s_i,4,:], make_rotX_chi(alphas[:,:,4,:], seq_i))
+            if args.stop_arf == 3: continue
 
             # NA delta
             RTF4[seq_i,:,:] = torch.einsum(
                 'ij,jk,kl->il', 
                 RTF3[seq_i,:,:], self.RTs_in_base_frame[s_i,5,:], make_rotX_chi(alphas[:,:,5,:],seq_i))
+            if args.stop_arf == 4: continue
 
             # NA nu2 - from gamma frame
             RTF5[seq_i,:,:] = torch.einsum(
                 'ij,jk,kl->il', 
                 RTF3[seq_i,:,:], self.RTs_in_base_frame[s_i,6,:], make_rotX_chi(alphas[:,:,6,:],seq_i))
+            if args.stop_arf == 5: continue
 
             # NA nu1
             RTF6[seq_i,:,:] = torch.einsum(
                 'ij,jk,kl->il', 
                 RTF5[seq_i,:,:], self.RTs_in_base_frame[s_i,7,:], make_rotX_chi(alphas[:,:,7,:], seq_i))
+            if args.stop_arf == 6: continue
                 
             # NA nu0
             RTF7[seq_i,:,:] = torch.einsum(
                 'ij,jk,kl->il', 
                 RTF6[seq_i,:,:], self.RTs_in_base_frame[s_i,8,:], make_rotX_chi(alphas[:,:,8,:], seq_i))
+            if args.stop_arf == 7: continue
 
 
             # NA chi - from nu1 frame
             RTF8[seq_i,:,:]= torch.einsum(
                 'ij,jk,kl->il', 
                 RTF6[seq_i,:,:], self.RTs_in_base_frame[s_i,9,:], make_rotX_chi(alphas[:,:,9,:],seq_i))
+            if args.stop_arf == 8: continue
 
         RTframes = torch.stack((
             RTF0,
@@ -699,6 +707,7 @@ def get_parser():
     parser.add_argument("-v", "--verbose",
                         action="store_true", help="be verbose")
     parser.add_argument("-o", "--output", help="output structure in the PDB format, by default: output.pdb", default="output.pdb")
+    parser.add_argument("--stop-arf", help="write a file after given arf", type=int)
     parser.add_argument("--chemicals",
                         help="elect chemicals.py file to be used, by default: chemicals.py",
                         default="chemicals.py")
