@@ -38,21 +38,156 @@ import numpy as np
 from functools import reduce
 import torch
 import torch.nn as nn
+torch.set_printoptions(threshold=10_000)
 import argparse
+#from chemicals import *
 
-from chemicals import *
-from make_ideal_RTs import base_indices, RTs_by_torsion, xyzs_in_base_frame, torsion_indices
+def make_ideal_RTs():
+    """<https://github.com/uw-ipd/RoseTTAFold2NA/blob/ca0283656f7c1205dc295a0abaee803f1457b038/network/util.py#L465>
+    """
+    torsion_indices = torch.full((NAATOKENS,NTOTALDOFS,4),0)
 
-ic.configureOutput(outputFunction=lambda *a: print(*a, file=sys.stderr), includeContext=True)
-ic.configureOutput(prefix='')
+    for i in range(NAATOKENS):
+        # NA BB tors
+        torsion_indices[i,0,:] = torch.tensor([-5,-7,-8,1])  # epsilon_prev
+        torsion_indices[i,1,:] = torch.tensor([-7,-8,1,3])   # zeta_prev
+        torsion_indices[i,2,:] = torch.tensor([0,1,3,4])     # alpha (+2pi/3)
+        torsion_indices[i,3,:] = torch.tensor([1,3,4,5])     # beta
+        torsion_indices[i,4,:] = torch.tensor([3,4,5,7])     # gamma
+        torsion_indices[i,5,:] = torch.tensor([4,5,7,8])     # delta
+
+        # NA sugar ring tors
+        torsion_indices[i,6,:] = torch.tensor([4,5,6,9])    # nu2
+        torsion_indices[i,7,:] = torch.tensor([5,6,9,10])   # nu1
+        torsion_indices[i,8,:] = torch.tensor([6,9,10,7])   # nu0
+
+        # NA chi
+        if torsions[i][0] is not None:
+            i_l = aa2long[i]
+            for k in range(4):
+                a = torsions[i][0][k]
+                torsion_indices[i,9,k] = i_l.index(a) # chi
+            # no NA torsion flips
+
+    # kinematic parameters
+    # base frame that builds each atom
+                
+    # prepare tensor, put 0
+    base_indices = torch.full((NAATOKENS, NTOTAL),0, dtype=torch.long)
+    # coords of each atom in the base frame, prepare tensor, put 1
+    xyzs_in_base_frame = torch.ones((NAATOKENS, NTOTAL,4))
+    # torsion frames
+    # RTs_in_base_frame
+    RTs_by_torsion = torch.eye(4).repeat(NAATOKENS, NTOTALTORS,1,1)
+
+    def make_frame(X, Y):
+        """Process ideal frames
+        Args:
+            vectors X Y, e.g.::
+
+                    tensor([-0.4948, -0.8559,  1.2489]), tensor([-0.7319,  1.2920,  0.0000])
+          tensor, e.g.::
+
+           tensor([[-0.3106, -0.6221, -0.7187],
+                   [-0.5373,  0.7386, -0.4071],
+                   [ 0.7841,  0.2597, -0.5637]])"""
+        Xn = X / torch.linalg.norm(X)
+        Y = Y - torch.dot(Y, Xn) * Xn
+        Yn = Y / torch.linalg.norm(Y)
+        Z = torch.cross(Xn,Yn)
+        Zn =  Z / torch.linalg.norm(Z)
+        return torch.stack((Xn,Yn,Zn), dim=-1)
+
+    ## NUCLEIC ACIDS
+    for i in range(NAATOKENS):
+        i_l = aa2long[i]
+
+        for name, base, coords in ideal_coords[i]:
+            idx = i_l.index(name)
+            base_indices[i,idx] = base
+            xyzs_in_base_frame[i,idx,:3] = torch.tensor(coords)
+
+        # epsilon(p)/zeta(p) - like omega in protein, not used to build atoms
+        #                    - keep as identity
+        RTs_by_torsion[i,0,:3,:3] = torch.eye(3)
+        #ic(RTs_by_torsion[i,0,:3,:3])
+
+        RTs_by_torsion[i,0,:3,3] = torch.zeros(3)
+        RTs_by_torsion[i,1,:3,:3] = torch.eye(3)
+        RTs_by_torsion[i,1,:3,3] = torch.zeros(3)
+
+        #ic(RTs_by_torsion)
+        #ic(xyzs_in_base_frame[i,0,:3])
+        # alpha
+        #ic(xyzs_in_base_frame[i,3,:3] - xyzs_in_base_frame[i,1,:3])
+        
+        RTs_by_torsion[i,2,:3,:3] = make_frame(
+            xyzs_in_base_frame[i,3,:3] - xyzs_in_base_frame[i,1,:3], # P->O5'
+            xyzs_in_base_frame[i,0,:3] - xyzs_in_base_frame[i,1,:3]  # P<-OP1
+        )
+        #ic(RTs_by_torsion[i,2,:3,:3])
+
+        RTs_by_torsion[i,2,:3,3] = xyzs_in_base_frame[i,3,:3] # O5'
+
+        # beta
+        RTs_by_torsion[i,3,:3,:3] = make_frame(
+            xyzs_in_base_frame[i,4,:3] , torch.tensor([-1.,0.,0.])
+        )
+        RTs_by_torsion[i,3,:3,3] = xyzs_in_base_frame[i,4,:3] # C5'
+
+        # gamma
+        RTs_by_torsion[i,4,:3,:3] = make_frame(
+            xyzs_in_base_frame[i,5,:3] , torch.tensor([-1.,0.,0.])
+        )
+        RTs_by_torsion[i,4,:3,3] = xyzs_in_base_frame[i,5,:3] # C4'
+
+        # delta
+        RTs_by_torsion[i,5,:3,:3] = make_frame(
+            xyzs_in_base_frame[i,7,:3] , torch.tensor([-1.,0.,0.])
+        )
+        RTs_by_torsion[i,5,:3,3] = xyzs_in_base_frame[i,7,:3] # C3'
+
+        # nu2
+        RTs_by_torsion[i,6,:3,:3] = make_frame(
+            xyzs_in_base_frame[i,6,:3] , torch.tensor([-1.,0.,0.])
+        )
+        RTs_by_torsion[i,6,:3,3] = xyzs_in_base_frame[i,6,:3] # O4'
+
+        # nu1
+        C1idx,C2idx = 9,10
+
+        RTs_by_torsion[i,7,:3,:3] = make_frame(
+            xyzs_in_base_frame[i,C1idx,:3] , torch.tensor([-1.,0.,0.])
+        )
+        RTs_by_torsion[i,7,:3,3] = xyzs_in_base_frame[i,C1idx,:3] # C1'
+
+        # nu0
+        RTs_by_torsion[i,8,:3,:3] = make_frame(
+            xyzs_in_base_frame[i,C2idx,:3] , torch.tensor([-1.,0.,0.])
+        )
+        RTs_by_torsion[i,8,:3,3] = xyzs_in_base_frame[i,C2idx,:3] # C2'
+
+        # NA chi
+        if torsions[i][0] is not None:
+            a2 = torsion_indices[i,9,2]
+            RTs_by_torsion[i,9,:3,:3] = make_frame(
+                xyzs_in_base_frame[i,a2,:3] , torch.tensor([-1.,0.,0.])
+            )
+            RTs_by_torsion[i,9,:3,3] = xyzs_in_base_frame[i,a2,:3] # N1/N9
+
+    ic(base_indices)
+    ic(RTs_by_torsion)
+    ic(xyzs_in_base_frame)
+    ic(torsion_indices)
+    return base_indices, RTs_by_torsion, xyzs_in_base_frame, torsion_indices
 
 def read_atoms(structure):
     """
     Args:
-       structure (BioPython structure): a structure
+    - structure (BioPython structure): a structure
 
     Returns:
-      tensor: with coords::
+    - tensor: with coords::
  
          coords = tensor([[[[50.1500, 76.1130, 39.1980],
                        [50.0010, 77.2540, 40.1370],
@@ -97,47 +232,46 @@ def compute_backbone_frames(structure, frame: list):
     
      - listRs (list): list of 3x3 Rotation matrices
      - listTs (list): list of Ts
-     - seq_id (list): e.g. ['pur', 'pyr']
-     - seq_name (list): ['G', 'C']
-     - seq (tensor): seq: e.g., tensor([0, 1]) where A = 0, C = 1, G = 2, U = 3, X = 4
+     - seq_types (list): e.g. ['pur', 'pyr']
+     - seq (list): ['G', 'C']
+     - seq_index (tensor): seq: e.g., tensor([0, 1]) where A = 0, C = 1, G = 2, U = 3, X = 4
     """
     listRs, listTs = [], []
-    seq_id, seq_name = [], []
-    seq = []
+    seq_types, seq = [], []
+    seq_index = []
     for residue in structure.get_residues():
         if residue.get_resname() in ["A","C","G","U"] and residue.has_id('OP1') and residue.has_id('OP2'):
             if residue.has_id('N9'): # PURINES
                 x1 = residue[frame[0]]
                 x2 = residue[frame[1]]
                 x3 = residue[frame[2]]
-                seq_id.append("pur")
-                seq_name.append(residue.get_resname())
+                seq_types.append("pur")
+                seq.append(residue.get_resname())
 
             else: # PYRAMIDINES
                 x1 = residue[frame[3]]
                 x2 = residue[frame[4]]
                 x3 = residue[frame[5]]
-                seq_id.append("pyr")
-                seq_name.append(residue.get_resname())
+                seq_types.append("pyr")
+                seq.append(residue.get_resname())
  
             x1_arr = np.array(x1.get_coord())[:,None]
             x2_arr = np.array(x2.get_coord())[:,None]
             x3_arr = np.array(x3.get_coord())[:,None]
 
-            seq.append(["A","C","G","U"].index(residue.get_resname()))
+            seq_index.append(["A","C","G","U"].index(residue.get_resname()))
 
             R, t = rigidFrom3Points(x1_arr, x2_arr, x3_arr)
             listRs.append(R)
             listTs.append(t)
 
-    seq = torch.tensor([seq])
-    return listRs, listTs, seq_id, seq_name, seq
+    seq_index = torch.tensor([seq_index])
+    return listRs, listTs, seq_types, seq, seq_index
 
 
 def rigidFrom3Points(x1, x2, x3):
     """
     Args:
-
     - x1, x2, x3 = arrays of coords, e.g.::
     
        x3: array([[48.878],
@@ -145,7 +279,6 @@ def rigidFrom3Points(x1, x2, x3):
                [41.113]], dtype=float32)
 
     Returns:
-
     - R, t: e.g.,::
 
             R: array([[-0.75477743, -0.31187248,  0.57710195],
@@ -276,8 +409,9 @@ class ComputeAllAtomCoords(torch.nn.Module):
         - base_indices = torch.full((5,34),0, dtype=torch.long) # base frame that builds each atom
         - xyzs_in_base_frame = torch.ones((5,34,4)) # coords of each atom in the base frame
         - RTs_in_base_frame = torch.eye(4).repeat(5,10,1,1) # torsion frames ( shape is 5,10,4,4 )
-        - seq_id: ['pur', 'pyr']
-        - seq: e.g., tensor([0, 1]) where A = 0, C = 1, G = 2, U = 3, X = 4
+        - seq_types: ['pur', 'pyr']
+        - seq: sequence as a list, e.g. ['G', 'C']
+        - seq_index: e.g., tensor([0, 1]) where A = 0, C = 1, G = 2, U = 3, X = 4
         """
         super(ComputeAllAtomCoords, self).__init__()
         self.base_indices = nn.Parameter(base_indices, requires_grad=False) 
@@ -285,7 +419,8 @@ class ComputeAllAtomCoords(torch.nn.Module):
         self.xyzs_in_base_frame = nn.Parameter(xyzs_in_base_frame, requires_grad=False) 
         self.listRs = np.array(listRs)
         self.listTs = np.array(listTs)
-        self.seq_id = seq_id
+        self.seq_types = seq_types
+        self.seq_index = seq_index
         self.seq = seq
 
 
@@ -309,13 +444,14 @@ class ComputeAllAtomCoords(torch.nn.Module):
         Rs, Ts = torch.Tensor(self.listRs), torch.squeeze(torch.Tensor(self.listTs))
         
         L = len(self.listRs)
-        ic(L)
+        #ic(L)
 
+        # init RTF0 ones
         RTF0 = torch.eye(4).repeat(L,1,1).to(device=Rs.device)
-
+        ic(RTF0)
+        
         # bb
         RTF0[:,:3,:3] = Rs
-
         RTF0[:,:3,3] = Ts
 
 
@@ -387,50 +523,61 @@ class ComputeAllAtomCoords(torch.nn.Module):
         #     RTframes.gather(2,self.base_indices[seq][...,None,None].repeat(1,1,1,4,4)), basexyzs.repeat(B,L,1,1)
         # )
              
-        dict_res = {'A':0, 'C':1, 'G':2, 'U':3}
-
         RTF1, RTF2, RTF3, RTF4, RTF5, RTF6, RTF7, RTF8 = torch.empty_like(RTF0),torch.empty_like(RTF0),torch.empty_like(RTF0),torch.empty_like(RTF0),torch.empty_like(RTF0),torch.empty_like(RTF0),torch.empty_like(RTF0),torch.empty_like(RTF0)
         # SIMPLIFIED MULTIPLICATION FOR FRAMES, REMOVING BATCH AND LOOPING OVER CHAIN LENGTH
-        for inde, name in enumerate(seq_name):
-            # NA alpha O5'
-            RTF1[inde,:,:] = torch.einsum(
-                'ij,jk,kl->il',
-                RTF0[inde,:,:], self.RTs_in_base_frame[dict_res[name],2,:], make_rotX_chi(alphas[:,:,2,:],inde)) 
+ 
+        # seq_i is the index for the sequence
+        # s_i is given nt in the index form [2, 2, 0, 2]
+        # RTs_in_base_frame:
+        #    eps(p)/zeta(p): 0-1
+        #    alpha/beta/gamma/delta: 2-5
+        #    nu2/nu1/nu0: 6-8
+        #    chi_1(na): 9
 
+
+        for seq_i, s_i in enumerate(self.seq_index.squeeze().tolist()):
+
+            # NA alpha O5'
+            RTF1[seq_i,:,:] = torch.einsum(
+                'ij,jk,kl->il',
+            RTF0[seq_i,:,:], self.RTs_in_base_frame[s_i,2,:], make_rotX_chi(alphas[:,:,2,:],seq_i)) 
+
+                
             # NA beta 
-            RTF2[inde,:,:] = torch.einsum(
+            RTF2[seq_i,:,:] = torch.einsum(
                 'ij,jk,kl->il', 
-                RTF1[inde,:,:], self.RTs_in_base_frame[dict_res[name],3,:], make_rotX_chi(alphas[:,:,3,:],inde))
+                RTF1[seq_i,:,:], self.RTs_in_base_frame[s_i,3,:], make_rotX_chi(alphas[:,:,3,:],seq_i))
 
             # NA gamma
-            RTF3[inde,:,:] = torch.einsum(
+            RTF3[seq_i,:,:] = torch.einsum(
                 'ij,jk,kl->il', 
-                RTF2[inde,:,:], self.RTs_in_base_frame[dict_res[name],4,:], make_rotX_chi(alphas[:,:,4,:], inde))
+                RTF2[seq_i,:,:], self.RTs_in_base_frame[s_i,4,:], make_rotX_chi(alphas[:,:,4,:], seq_i))
 
             # NA delta
-            RTF4[inde,:,:] = torch.einsum(
+            RTF4[seq_i,:,:] = torch.einsum(
                 'ij,jk,kl->il', 
-                RTF3[inde,:,:], self.RTs_in_base_frame[dict_res[name],5,:], make_rotX_chi(alphas[:,:,5,:],inde))
+                RTF3[seq_i,:,:], self.RTs_in_base_frame[s_i,5,:], make_rotX_chi(alphas[:,:,5,:],seq_i))
 
             # NA nu2 - from gamma frame
-            RTF5[inde,:,:] = torch.einsum(
+            RTF5[seq_i,:,:] = torch.einsum(
                 'ij,jk,kl->il', 
-                RTF3[inde,:,:], self.RTs_in_base_frame[dict_res[name],6,:], make_rotX_chi(alphas[:,:,6,:],inde))
+                RTF3[seq_i,:,:], self.RTs_in_base_frame[s_i,6,:], make_rotX_chi(alphas[:,:,6,:],seq_i))
 
             # NA nu1
-            RTF6[inde,:,:] = torch.einsum(
+            RTF6[seq_i,:,:] = torch.einsum(
                 'ij,jk,kl->il', 
-                RTF5[inde,:,:], self.RTs_in_base_frame[dict_res[name],7,:], make_rotX_chi(alphas[:,:,7,:], inde))
-
+                RTF5[seq_i,:,:], self.RTs_in_base_frame[s_i,7,:], make_rotX_chi(alphas[:,:,7,:], seq_i))
+                
             # NA nu0
-            RTF7[inde,:,:] = torch.einsum(
+            RTF7[seq_i,:,:] = torch.einsum(
                 'ij,jk,kl->il', 
-                RTF6[inde,:,:], self.RTs_in_base_frame[dict_res[name],8,:], make_rotX_chi(alphas[:,:,8,:], inde))
+                RTF6[seq_i,:,:], self.RTs_in_base_frame[s_i,8,:], make_rotX_chi(alphas[:,:,8,:], seq_i))
+
 
             # NA chi - from nu1 frame
-            RTF8[inde,:,:]= torch.einsum(
+            RTF8[seq_i,:,:]= torch.einsum(
                 'ij,jk,kl->il', 
-                RTF6[inde,:,:], self.RTs_in_base_frame[dict_res[name],9,:], make_rotX_chi(alphas[:,:,9,:],inde))
+                RTF6[seq_i,:,:], self.RTs_in_base_frame[s_i,9,:], make_rotX_chi(alphas[:,:,9,:],seq_i))
 
         RTframes = torch.stack((
             RTF0,
@@ -439,8 +586,8 @@ class ComputeAllAtomCoords(torch.nn.Module):
 
         #ic(basexyzs)
         #seq = torch.tensor([[2, 1]]) # gc
-        seq = self.seq
-        ic(seq)
+        seq_index = self.seq_index
+        #ic(seq)
         #ic(self.base_indices)#[seq])
 
         # RTframes.shape: torch.Size([2, 9, 4, 4]) # 9 frames, batch removed!
@@ -449,11 +596,12 @@ class ComputeAllAtomCoords(torch.nn.Module):
         #with unsqueeze:
         #torch.Size([1, 2, 9, 4, 4])
         RTframes = torch.unsqueeze(RTframes, dim=0)
-        ic(RTframes.shape)
+        #ic(RTframes.shape)
         # biseq.shape: 
         # rf torch.Size([1, 2, 36, 4, 4])
         #    torch.Size([1, 2, 34, 4, 4])
-        biseq = self.base_indices[seq][...,None,None].repeat(1,1,1,4,4) #)#.shape)
+        biseq = self.base_indices[seq_index][...,None,None].repeat(1,1,1,4,4) #)#.shape)
+        ic(biseq)
         #ic(biseq.shape)
 
         # torch.Size([1, 2, 36, 4, 4])
@@ -463,7 +611,7 @@ class ComputeAllAtomCoords(torch.nn.Module):
         # torch.Size([5, 34, 4])
         # torch.Size([1, 2, 36, 4]) rf
         #ic(basexyzs.shape)
-        basexyzs = self.xyzs_in_base_frame[seq]
+        basexyzs = self.xyzs_in_base_frame[seq_index]
 
         xyzs = torch.einsum('brtij,brtj->brti', gather, basexyzs)
         #sys.exit(0)
@@ -471,9 +619,8 @@ class ComputeAllAtomCoords(torch.nn.Module):
         #x = RTframes.gather(2, biseq) 
         #basexyzs = basexyzs.squeeze(axis, (axis=0)
         #sys.exit(0)
-        print(xyzs)
-        print(xyzs[...,:3])
-
+        #print(xyzs)
+        #pbrint(xyzs[...,:3])
         return RTframes, xyzs[...,:3]
 
     ####Functions from util.py RFNA#####
@@ -517,7 +664,7 @@ class ComputeAllAtomCoords(torch.nn.Module):
         # idealize given xyz coordinates before computing torsion angles
         xyz = self.idealize_reference_frame(xyz_in)
 
-        for _id in self.seq_id:
+        for _id in self.seq_types:
             if _id == "pur":
                 ts = torsion_indices[0]
             else:
@@ -544,14 +691,17 @@ class ComputeAllAtomCoords(torch.nn.Module):
         return torsions #, torsions_alt, tors_mask
 
 def get_parser():
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser()
+       # description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 
     #parser.add_argument('-', "--", help="", default="")
 
     parser.add_argument("-v", "--verbose",
                         action="store_true", help="be verbose")
-    parser.add_argument("--output", help="", default="output.pdb")
+    parser.add_argument("-o", "--output", help="output structure in the PDB format, by default: output.pdb", default="output.pdb")
+    parser.add_argument("--chemicals",
+                        help="elect chemicals.py file to be used, by default: chemicals.py",
+                        default="chemicals.py")
     parser.add_argument("file", help="", default="") # nargs='+')
     return parser
 
@@ -559,21 +709,46 @@ if __name__ == '__main__':
     parser = get_parser()
     args = parser.parse_args()
 
+    ic.configureOutput(outputFunction=lambda *a: print(*a, file=sys.stdout), includeContext=True)
+    #ic.configureOutput(outputFunction=lambda *a: print(*a, file=open('out', 'w')),includeContext=True)
+    ic.configureOutput(prefix='')
+
+    ic.disable()
+    if args.verbose:
+        ic.enable()
+
+    # load different chemicals
+    import importlib
+    ic(args.chemicals)
+    #chemicals = importlib.import_module(args.chemicals, package=None)
+    #with open(args.chemicals) as f:
+    #     eval(f.read())
+    #import imp
+    #imp.load_module('chemicals', filename=args.chemicals)
+    #import imp
+    #imp.
+    #eval('from chemicals import *')
+    #'ideal_coords.py'
+    #'./chemicals_OP1off.py'
+    exec(open(args.chemicals).read())
+    #from chemicals import *
+    #ic(chemicals)
     # read PDB file
     sloppyparser = PDBParser(
         PERMISSIVE=True, structure_builder=xpdb.SloppyStructureBuilder()
     )
     structure = sloppyparser.get_structure("", args.file) 
-    ic(structure)
-    ic('File:' + args.file)
-    
-    listRs, listTs, seq_id, seq_name, seq = compute_backbone_frames(structure, frame=["OP1","P", "OP2", "OP1", "P","OP2"])
+    print('Input:' + args.file)
+
+    base_indices, RTs_by_torsion, xyzs_in_base_frame, torsion_indices = make_ideal_RTs()
+
+    listRs, listTs, seq_types, seq, seq_index = compute_backbone_frames(structure, frame=["OP1","P", "OP2", "OP1", "P","OP2"])
     xyzs_in = read_atoms(structure)
 
     # Running algorithm 24
     c = ComputeAllAtomCoords()
     alphas = c.get_torsions(xyzs_in, torsion_indices, False, None) 
     RTframes,  xyzs = c(alphas)
-
     # Write output file
-    writepdb(args.output, xyzs, seq)#[0, -1])#, bfacts=best_lddt[0].float())
+    writepdb(args.output, xyzs, seq_index)#[0, -1])#, bfacts=best_lddt[0].float())
+    print('Output:' + args.output)
