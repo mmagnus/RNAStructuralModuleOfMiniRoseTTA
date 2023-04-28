@@ -44,23 +44,49 @@ import argparse
 
 def make_ideal_RTs():
     """<https://github.com/uw-ipd/RoseTTAFold2NA/blob/ca0283656f7c1205dc295a0abaee803f1457b038/network/util.py#L465>
+
+    A tensor of size of all NATOKENS, 5, and 10 torsion angles.
+    
+    torsion_indices: tensor([[[-5, -7, -8,  1],
+                          [-7, -8,  1,  3],
+                          [ 0,  1,  3,  4],
+                          [ 1,  3,  4,  5],
+                          [ 3,  4,  5,  7],
+                          [ 4,  5,  7,  8],
+                          [ 4,  5,  6,  9],
+                          [ 5,  6,  9, 10],
+                          [ 6,  9, 10,  7],
+                          [ 6,  9, 21, 15]],
+                 
+                         [[ 0,  0,  0,  0],  # to be populated with the next round
+                          [ 0,  0,  0,  0],
+    
     """
     torsion_indices = torch.full((NAATOKENS,NTOTALDOFS,4),0)
 
-    for i in range(NAATOKENS):
+    for i in range(NAATOKENS):  # for 5 tokens that we have
         # NA BB tors
         torsion_indices[i,0,:] = torch.tensor([-5,-7,-8,1])  # epsilon_prev
         torsion_indices[i,1,:] = torch.tensor([-7,-8,1,3])   # zeta_prev
+        # OP1 P OP2 C5'
         torsion_indices[i,2,:] = torch.tensor([0,1,3,4])     # alpha (+2pi/3)
+        
         torsion_indices[i,3,:] = torch.tensor([1,3,4,5])     # beta
+          
         torsion_indices[i,4,:] = torch.tensor([3,4,5,7])     # gamma
+        # C5' C4' H5'' C3'
         torsion_indices[i,5,:] = torch.tensor([4,5,7,8])     # delta
 
         # NA sugar ring tors
+        # C5' C4' H5' H4'
         torsion_indices[i,6,:] = torch.tensor([4,5,6,9])    # nu2
+        # C4' H5' H4' O4'
         torsion_indices[i,7,:] = torch.tensor([5,6,9,10])   # nu1
+        # H5' H4' O4' H5''
         torsion_indices[i,8,:] = torch.tensor([6,9,10,7])   # nu0
 
+        # [5, 9, 21, 15]
+        # O4'  C1' N9 C4
         # NA chi
         if torsions[i][0] is not None:
             i_l = aa2long[i]
