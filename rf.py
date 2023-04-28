@@ -563,6 +563,8 @@ class ComputeAllAtomCoords(torch.nn.Module):
 
         for seq_i, s_i in enumerate(self.seq_index.squeeze().tolist()):
 
+            if args.stop_arf == 0: continue
+
             # NA alpha O5'
             RTF1[seq_i,:,:] = torch.einsum(
                 'ij,jk,kl->il',

@@ -25,7 +25,7 @@ if __name__ == '__main__':
     parser = get_parser()
     args = parser.parse_args()
 
-    for i in range(1, 9):
+    for i in range(0, 9):
         cmd = 'python rf.py --stop-arf ' + str(i) + ' -v ./examples/4GXY_min.pdb -o m' + str(i) + '.pdb'
         ic(cmd)
         import os
