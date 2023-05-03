@@ -18,6 +18,7 @@ alphas: x len of sequence::
                   [ 0.2032, -0.9791],
                  ...
  alphas: torch.zeros((1,L,10,2), device=seq.device) # the 2 is for cos and sign components
+ torch.Size([*, N, 10, 2])
 
 RTFX ::
  tensor([[0., 0., 0., 0.],
@@ -62,31 +63,59 @@ def make_ideal_RTs():
                           [ 0,  0,  0,  0],
     
     """
-    torsion_indices = torch.full((NAATOKENS,NTOTALDOFS,4),0)
-
+    ic(NAATOKENS,NTOTALDOFS)
+    torsion_indices = torch.full((NAATOKENS,NTOTALDOFS,4),0) # 5 and 10
+    ic(torsion_indices)
     for i in range(NAATOKENS):  # for 5 tokens that we have
         # NA BB tors
-        torsion_indices[i,0,:] = torch.tensor([-5,-7,-8,1])  # epsilon_prev
+        torsion_indices[i,0,:] = torch.tensor([-5,-7,-8, 1])  # epsilon_prev
         torsion_indices[i,1,:] = torch.tensor([-7,-8,1,3])   # zeta_prev
         # OP1 P OP2 C5'
+        # OP1 P O5' C5'
+        ## Ugly code to get the names for atoms [1] ######
+        ## l = [-5,-7,-8, 1]
+        if 0:
+            l = [0,1,3,4]
+            for i in l:
+                print(aa2long[0][i].strip(), end = ' ')
+            sys.exit(0)
+        ####################################################
+        # OP1 P O5' C5' 
         torsion_indices[i,2,:] = torch.tensor([0,1,3,4])     # alpha (+2pi/3)
-        
+
         torsion_indices[i,3,:] = torch.tensor([1,3,4,5])     # beta
           
         torsion_indices[i,4,:] = torch.tensor([3,4,5,7])     # gamma
+        #  Note: alpha:   O3'(i-1)-P-O5'-C5'
+        #  beta:    P-O5'-C5'-C4'
+        #  gamma:   O5'-C5'-C4'-C3'
+        #  delta:   C5'-C4'-C3'-O3'
+        #  epsilon: C4'-C3'-O3'-P(i+1)
+        #  zeta:    C3'-O3'-P(i+1)-O5'(i+1)
+        # https://x3dna.org/highlights/torsion-angles-of-nucleic-acid-structures
         # C5' C4' H5'' C3'
+        # C5' C4' C3' O3' # C5'-C4'-C3'-O3'
         torsion_indices[i,5,:] = torch.tensor([4,5,7,8])     # delta
 
+        # Note:
+        # v0: C4'-O4'-C1'-C2'
+        # v1: O4'-C1'-C2'-C3'
+        # v2: C1'-C2'-C3'-C4'
+        # v3: C2'-C3'-C4'-O4'
+        # v4: C3'-C4'-O4'-C1'
         # NA sugar ring tors
-        # C5' C4' H5' H4'
+        # C5' C4' H5' H4' # before
+        # C5' C4' O4' C1' # new from [1] 
         torsion_indices[i,6,:] = torch.tensor([4,5,6,9])    # nu2
-        # C4' H5' H4' O4'
+        # C4' H5' H4' O4' # old
+        # C4' O4' C1' C2' # new from [1]
         torsion_indices[i,7,:] = torch.tensor([5,6,9,10])   # nu1
-        # H5' H4' O4' H5''
+        # H5' H4' O4' H5'' # old
+        # O4' C1' C2' C3' new from [1]
         torsion_indices[i,8,:] = torch.tensor([6,9,10,7])   # nu0
 
         # [5, 9, 21, 15]
-        # O4'  C1' N9 C4
+        # O4' C1' N9 C4
         # NA chi
         if torsions[i][0] is not None:
             i_l = aa2long[i]
@@ -371,7 +400,9 @@ def writepdb(filename: str, atoms: torch.tensor, seq, idx_pdb=None, bfacts=None)
 def make_rotX(angs, eps=1e-6):
     """Rotate about the x axis
 
-    Not used here.
+    At once, the whole Tensor, see make_rotX_chi() for rotation for a given residue.
+    
+    .. warning: Not used in the code right now.
     """
     B,L = angs.shape[:2]
     NORM = torch.linalg.norm(angs, dim=-1) + eps
@@ -386,7 +417,16 @@ def make_rotX(angs, eps=1e-6):
 
 def make_rotX_chi(angs, iden, eps=1e-6):
     """
-    rotate about the x axis, for simplified version for single RNA looping over chain length #
+    Rotate about the x axis, for simplified version for single RNA looping over chain length.
+
+    rf.py:414 in make_rotX_chi()
+    angs: tensor([[[ 0.4348, -0.9005],
+                   [ 0.9997,  0.0261]]])
+    rf.py:424 in make_rotX_chi()
+    RTs: tensor([[ 1.0000,  0.0000,  0.0000,  0.0000],
+                 [ 0.0000,  0.4348,  0.9005,  0.0000],
+                 [ 0.0000, -0.9005,  0.4348,  0.0000],
+                 [ 0.0000,  0.0000,  0.0000,  1.0000]])
     """
     angs2 = torch.squeeze(angs[:,iden,:])
     NORM = torch.linalg.norm(angs2, dim=-1) + eps
@@ -682,6 +722,10 @@ class ComputeAllAtomCoords(torch.nn.Module):
         return self.th_dih_v(a-b,b-c,c-d)
     
     def idealize_reference_frame(self, xyz_in):
+        """
+        idealize given xyz coordinates before computing torsion angles
+        """
+        ic(xyz_in)
         xyz = xyz_in.clone()
         Rs, Ts = torch.Tensor(self.listRs).unsqueeze(0), torch.squeeze(torch.Tensor(self.listTs)).unsqueeze(0)
 
@@ -689,22 +733,59 @@ class ComputeAllAtomCoords(torch.nn.Module):
         OP2ideal = torch.tensor([1.4855, 0.000, 0.000], device=xyz_in.device)
         xyz[:,:,0,:] = torch.einsum('...ij,j->...i', Rs, OP1ideal) + Ts
         xyz[:,:,2,:] = torch.einsum('...ij,j->...i', Rs, OP2ideal) + Ts
-
+        ic(xyz)
         return xyz
 
     def get_torsions(self, xyz_in, torsion_indices, torsion_can_flip, ref_angles, mask_in=None):
+        """"
+        Args:
+         coords::
+         
+            xyz_in: tensor([[[[50.1500, 76.1130, 39.1980],
+                  [50.0010, 77.2540, 40.1370],
+                  [48.8780, 77.2580, 41.1130],
+                  [51.3840, 77.5700, 40.8670],
+                  [51.9790, 76.6200, 41.7380],
+
+         torsion_indices:: # for 5 residues, all 10 torsion angles
+                 tensor([[[-5, -7, -8,  1],
+                          [-7, -8,  1,  3],
+                          [ 0,  1,  3,  4],
+                          [ 1,  3,  4,  5],
+                          [ 3,  4,  5,  7],
+                          [ 4,  5,  7,  8],
+                          [ 4,  5,  6,  9],
+                          [ 5,  6,  9, 10],
+                          [ 6,  9, 10,  7],
+                          [ 6,  9, 21, 15]],
+                 
+                          (...)
+                          
+                         [[-5, -7, -8,  1],
+                          [-7, -8,  1,  3],
+                          [ 0,  1,  3,  4],
+                          [ 1,  3,  4,  5],
+                          [ 3,  4,  5,  7],
+                          [ 4,  5,  7,  8],
+                          [ 4,  5,  6,  9],
+                          [ 5,  6,  9, 10],
+                          [ 6,  9, 10,  7],
+                          [ 0,  0,  0,  0]]])
+
+        """
         B,L = xyz_in.shape[:2]
 
         # tors_mask = get_tor_mask(seq, torsion_indices, mask_in)
-
         # idealize given xyz coordinates before computing torsion angles
         xyz = self.idealize_reference_frame(xyz_in)
+        #xyz = xyz_in 
 
         for _id in self.seq_types:
             if _id == "pur":
                 ts = torsion_indices[0]
             else:
                 ts = torsion_indices[1]
+
         bs = torch.arange(B, device=xyz_in.device)[:,None,None,None]
         xs = torch.arange(L, device=xyz_in.device)[None,:,None,None] - (ts<0)*1 # ts<-1 ==> prev res
         ys = torch.abs(ts)
@@ -719,7 +800,15 @@ class ComputeAllAtomCoords(torch.nn.Module):
         mask1 = (torch.isnan(torsions[...,1])).nonzero()
         torsions[mask0[:,0],mask0[:,1],mask0[:,2],0] = 1.0
         torsions[mask1[:,0],mask1[:,1],mask1[:,2],1] = 0.0
-
+        #torsions  = torch.full_like(torsions, [0, 1])
+        shape = torsions.shape
+        # Create a tensor filled with the desired values [0, 1]
+        replacement = torch.tensor([0.0, 1.0]).view(1, 1, 1, 2).expand(shape)
+        ic(replacement)
+        if args.torsion0:
+            return replacement
+        #ic(torsions)
+        #aaaaaaaaaa
         # alt chis
         # torsions_alt = torsions.clone()
         # torsions_alt[torsion_can_flip[seq,:]] *= -1
@@ -733,6 +822,8 @@ def get_parser():
     #parser.add_argument('-', "--", help="", default="")
 
     parser.add_argument("-v", "--verbose",
+                        action="store_true", help="be verbose")
+    parser.add_argument("--torsion0",
                         action="store_true", help="be verbose")
     parser.add_argument("-o", "--output", help="output structure in the PDB format, by default: output.pdb", default="output.pdb")
     parser.add_argument("--stop-artf", help="write a file after rotation/translation frame calculation/transition, starts from 0, if 0, then you get backbone frame positions only", type=int)
@@ -784,7 +875,7 @@ if __name__ == '__main__':
 
     # Running algorithm 24
     c = ComputeAllAtomCoords()
-    alphas = c.get_torsions(xyzs_in, torsion_indices, False, None) 
+    alphas = c.get_torsions(xyzs_in, torsion_indices, False, None)
     RTframes,  xyzs = c(alphas)
     ic(RTframes)
     # Write output file
