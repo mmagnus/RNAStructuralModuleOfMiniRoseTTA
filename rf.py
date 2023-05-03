@@ -826,7 +826,7 @@ def get_parser():
     parser.add_argument("--torsion0",
                         action="store_true", help="be verbose")
     parser.add_argument("-o", "--output", help="output structure in the PDB format, by default: output.pdb", default="output.pdb")
-    parser.add_argument("--stop-artf", help="write a file after rotation/translation frame calculation/transition, starts from 0, if 0, then you get backbone frame positions only", type=int)
+    parser.add_argument("--stop-artf", help="write a PDB file after rotation/translation frame calculation/transition, starts from 0, if 0, then you get backbone frame positions only", type=int)
     parser.add_argument("--chemicals",
                         help="elect chemicals.py file to be used, by default: chemicals.py",
                         default="chemicals.py")
