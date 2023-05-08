@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
 """
-alphas: x len of sequence::
+NATOKENS = 5 in our case, it's a number of nucleic acid residues [4; A, G, C, U] + X [unknown base]
+
+alphas: for each residue it's 10 element tensor of sin, cos that describes the torsion angles:
         tensor([[[[-0.4466, -0.8947], 
                   [-0.2530,  0.9675],
                   [-0.9160,  0.4012],
@@ -20,7 +21,7 @@ alphas: x len of sequence::
  alphas: torch.zeros((1,L,10,2), device=seq.device) # the 2 is for cos and sign components
  torch.Size([*, N, 10, 2])
 
-RTFX ::
+RTFX where X is from 0 to 8 in our case, this is a rotation+translation (4x4) tensor::
  tensor([[0., 0., 0., 0.],
         [0., 0., 0., 0.],
         [0., 0., 0., 0.],
@@ -63,11 +64,13 @@ def make_ideal_RTs():
                           [ 0,  0,  0,  0],
     
     """
-    ic(NAATOKENS,NTOTALDOFS)
+    ic(NAATOKENS, NTOTALDOFS)
     torsion_indices = torch.full((NAATOKENS,NTOTALDOFS,4),0) # 5 and 10
-    ic(torsion_indices)
+
     for i in range(NAATOKENS):  # for 5 tokens that we have
         # NA BB tors
+        # H1' H2' H3' P # based on the snippet [1] below,
+        # is this correct
         torsion_indices[i,0,:] = torch.tensor([-5,-7,-8, 1])  # epsilon_prev
         torsion_indices[i,1,:] = torch.tensor([-7,-8,1,3])   # zeta_prev
         # OP1 P OP2 C5'
@@ -75,7 +78,7 @@ def make_ideal_RTs():
         ## Ugly code to get the names for atoms [1] ######
         ## l = [-5,-7,-8, 1]
         if 0:
-            l = [0,1,3,4]
+            l = [-5,-7,-8, 1]
             for i in l:
                 print(aa2long[0][i].strip(), end = ' ')
             sys.exit(0)
@@ -127,6 +130,8 @@ def make_ideal_RTs():
     # kinematic parameters
     # base frame that builds each atom
                 
+    ic(torsion_indices)
+
     # prepare tensor, put 0
     base_indices = torch.full((NAATOKENS, NTOTAL),0, dtype=torch.long)
     # coords of each atom in the base frame, prepare tensor, put 1
@@ -141,11 +146,13 @@ def make_ideal_RTs():
             vectors X Y, e.g.::
 
                     tensor([-0.4948, -0.8559,  1.2489]), tensor([-0.7319,  1.2920,  0.0000])
+
           tensor, e.g.::
 
            tensor([[-0.3106, -0.6221, -0.7187],
                    [-0.5373,  0.7386, -0.4071],
                    [ 0.7841,  0.2597, -0.5637]])"""
+
         Xn = X / torch.linalg.norm(X)
         Y = Y - torch.dot(Y, Xn) * Xn
         Yn = Y / torch.linalg.norm(Y)
@@ -180,16 +187,41 @@ def make_ideal_RTs():
             xyzs_in_base_frame[i,3,:3] - xyzs_in_base_frame[i,1,:3], # P->O5'
             xyzs_in_base_frame[i,0,:3] - xyzs_in_base_frame[i,1,:3]  # P<-OP1
         )
-        #ic(RTs_by_torsion[i,2,:3,:3])
+        
+        #RTs_by_torsion[i,2,:3,:3]: tensor([[-0.3106, -0.6221, -0.7187],
+        #                           [-0.5373,  0.7386, -0.4071],
+        #                           [ 0.7841,  0.2597, -0.5637]])
 
+        ic(RTs_by_torsion[i,2,:3,:3])
         RTs_by_torsion[i,2,:3,3] = xyzs_in_base_frame[i,3,:3] # O5'
+        ic(RTs_by_torsion[i,2,:3,3])
+        ic(RTs_by_torsion.shape)
 
+        ## rf.py:198 in make_ideal_RTs()
+        ## torch.Size([5, 10, 4, 4])
+        ## RTs_by_torsion: tensor([[[[ 1.0000,  0.0000,  0.0000,  0.0000],
+        ##                   [ 0.0000,  1.0000,  0.0000,  0.0000],
+        ##                   [ 0.0000,  0.0000,  1.0000,  0.0000],
+        ##                   [ 0.0000,  0.0000,  0.0000,  1.0000]],
+                
+        ##                  [[ 1.0000,  0.0000,  0.0000,  0.0000],
+        ##                   [ 0.0000,  1.0000,  0.0000,  0.0000],
+        ##                   [ 0.0000,  0.0000,  1.0000,  0.0000],
+        ##                   [ 0.0000,  0.0000,  0.0000,  1.0000]],
+                
+        ##                  [[-0.3106, -0.6221, -0.7187, -0.4948],
+        ##                   [-0.5373,  0.7386, -0.4071, -0.8559],
+        ##                   [ 0.7841,  0.2597, -0.5637,  1.2489],
+        ##                   [ 0.0000,  0.0000,  0.0000,  1.0000]],
+                
         # beta
         RTs_by_torsion[i,3,:3,:3] = make_frame(
             xyzs_in_base_frame[i,4,:3] , torch.tensor([-1.,0.,0.])
         )
-        RTs_by_torsion[i,3,:3,3] = xyzs_in_base_frame[i,4,:3] # C5'
 
+        RTs_by_torsion[i,3,:3,3] = xyzs_in_base_frame[i,4,:3] # C5' translation
+        ic(RTs_by_torsion)
+ 
         # gamma
         RTs_by_torsion[i,4,:3,:3] = make_frame(
             xyzs_in_base_frame[i,5,:3] , torch.tensor([-1.,0.,0.])
@@ -404,7 +436,7 @@ def make_rotX(angs, eps=1e-6):
     
     .. warning: Not used in the code right now.
     """
-    B,L = angs.shape[:2]
+    B, L = angs.shape[:2]
     NORM = torch.linalg.norm(angs, dim=-1) + eps
 
     RTs = torch.eye(4,  device=angs.device).repeat(B,L,1,1)
@@ -422,6 +454,7 @@ def make_rotX_chi(angs, iden, eps=1e-6):
     rf.py:414 in make_rotX_chi()
     angs: tensor([[[ 0.4348, -0.9005],
                    [ 0.9997,  0.0261]]])
+
     rf.py:424 in make_rotX_chi()
     RTs: tensor([[ 1.0000,  0.0000,  0.0000,  0.0000],
                  [ 0.0000,  0.4348,  0.9005,  0.0000],
@@ -600,7 +633,6 @@ class ComputeAllAtomCoords(torch.nn.Module):
         #    nu2/nu1/nu0: 6-8
         #    chi_1(na): 9
 
-
         for seq_i, s_i in enumerate(self.seq_index.squeeze().tolist()):
 
             if args.stop_artf == 0: continue
@@ -771,6 +803,31 @@ class ComputeAllAtomCoords(torch.nn.Module):
                           [ 5,  6,  9, 10],
                           [ 6,  9, 10,  7],
                           [ 0,  0,  0,  0]]])
+        Returns:
+        
+          tensor of [cos_angle,sin_angle] describing torsion angles::
+ 
+            tensor([[[[1., 0.],
+                  [1., 0.],
+                  [1., 0.],
+                  [1., 0.],
+                  [1., 0.],
+                  [1., 0.],
+                  [1., 0.],
+                  [1., 0.],
+                  [1., 0.],
+                  [1., 0.]],
+
+                 [[1., 0.],
+                  [1., 0.],
+                  [1., 0.],
+                  [1., 0.],
+                  [1., 0.],
+                  [1., 0.],
+                  [1., 0.],
+                  [1., 0.],
+                  [1., 0.],
+                  [1., 0.]]]])
 
         """
         B,L = xyz_in.shape[:2]
@@ -803,8 +860,10 @@ class ComputeAllAtomCoords(torch.nn.Module):
         #torsions  = torch.full_like(torsions, [0, 1])
         shape = torsions.shape
         # Create a tensor filled with the desired values [0, 1]
-        replacement = torch.tensor([0.0, 1.0]).view(1, 1, 1, 2).expand(shape)
-        ic(replacement)
+        # 0.0, 1.0 is not 90?
+        replacement = torch.tensor([1.0, 0.0]).view(1, 1, 1, 2).expand(shape)
+        print(replacement)
+
         if args.torsion0:
             return replacement
         #ic(torsions)
@@ -872,7 +931,7 @@ if __name__ == '__main__':
 
     listRs, listTs, seq_types, seq, seq_index = compute_backbone_frames(structure, frame=["OP1","P", "OP2", "OP1", "P","OP2"])
     xyzs_in = read_atoms(structure)
-
+    
     # Running algorithm 24
     c = ComputeAllAtomCoords()
     alphas = c.get_torsions(xyzs_in, torsion_indices, False, None)
