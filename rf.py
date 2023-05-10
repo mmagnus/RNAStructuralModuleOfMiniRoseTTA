@@ -361,9 +361,15 @@ def rigidFrom3Points(x1, x2, x3):
     Args:
     - x1, x2, x3 = arrays of coords, e.g.::
     
-       x3: array([[48.878],
-               [77.258],
-               [41.113]], dtype=float32)
+        x1: array([[50.15 ],
+                   [76.113],
+                   [39.198]], dtype=float32)
+        x2: array([[50.001],
+                   [77.254],
+                   [40.137]], dtype=float32)
+        x3: array([[48.878],
+                   [77.258],
+                   [41.113]], dtype=float32)
 
     Returns:
     - R, t: e.g.,::
@@ -550,6 +556,11 @@ class ComputeAllAtomCoords(torch.nn.Module):
         ic(RTF0)
         
         # bb
+        if args.rtf0:
+            pass
+        else:
+            RTF0[:,:3,3] = Ts
+            RTF0[:,:3,:3] = Rs
         RTF0[:,:3,:3] = Rs
         RTF0[:,:3,3] = Ts
 
@@ -883,6 +894,8 @@ def get_parser():
     parser.add_argument("-v", "--verbose",
                         action="store_true", help="be verbose")
     parser.add_argument("--torsion0",
+                        action="store_true", help="be verbose")
+    parser.add_argument("--rtf0",
                         action="store_true", help="be verbose")
     parser.add_argument("-o", "--output", help="output structure in the PDB format, by default: output.pdb", default="output.pdb")
     parser.add_argument("--stop-artf", help="write a PDB file after rotation/translation frame calculation/transition, starts from 0, if 0, then you get backbone frame positions only", type=int)
