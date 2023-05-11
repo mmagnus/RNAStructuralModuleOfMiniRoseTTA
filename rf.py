@@ -766,7 +766,9 @@ class ComputeAllAtomCoords(torch.nn.Module):
     
     def idealize_reference_frame(self, xyz_in):
         """
-        idealize given xyz coordinates before computing torsion angles
+        Idealize given xyz coordinates before computing torsion angles
+        Rs and Ts from pdb files.
+        And they are idealized by OP1ideal, OP2ideal
         """
         ic(xyz_in)
         xyz = xyz_in.clone()
@@ -774,6 +776,11 @@ class ComputeAllAtomCoords(torch.nn.Module):
 
         OP1ideal = torch.tensor([-0.7319, 1.2920, 0.000], device=xyz_in.device)
         OP2ideal = torch.tensor([1.4855, 0.000, 0.000], device=xyz_in.device)
+        # 0 for OP1
+        # 2 for OP2
+        # ATOM      1  OP1   G A   1      50.150  76.113  39.198  1.00  0.00
+        # ATOM      2  P     G A   1      50.001  77.254  40.137  1.00  0.00
+        # ATOM      3  OP2   G A   1      48.880  77.258  41.111  1.00  0.00
         xyz[:,:,0,:] = torch.einsum('...ij,j->...i', Rs, OP1ideal) + Ts
         xyz[:,:,2,:] = torch.einsum('...ij,j->...i', Rs, OP2ideal) + Ts
         ic(xyz)
