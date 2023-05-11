@@ -553,7 +553,6 @@ class ComputeAllAtomCoords(torch.nn.Module):
 
         # init RTF0 ones
         RTF0 = torch.eye(4).repeat(L,1,1).to(device=Rs.device)
-        ic(RTF0)
         
         # bb
         if args.rtf0:
@@ -561,9 +560,6 @@ class ComputeAllAtomCoords(torch.nn.Module):
         else:
             RTF0[:,:3,3] = Ts
             RTF0[:,:3,:3] = Rs
-        RTF0[:,:3,:3] = Rs
-        RTF0[:,:3,3] = Ts
-
 
         # rt self.xyzs_in_base_frame.shape torch.Size([32, 36, 4])
         # basexyzs.shape: torch.Size([5, 34, 4])
