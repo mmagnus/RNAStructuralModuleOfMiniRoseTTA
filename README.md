@@ -74,4 +74,14 @@ RTFX where X is from 0 to 8 in our case, this is a rotation+translation (4x4) te
         [0., 0., 0., 0.],
         [0., 0., 0., 0.],
         [0., 0., 0., 0.]])
+
+xyzs, absolute, not in the base frame
+tensor([[[[50.1505, 76.1135, 39.1979,  1.0000],
+          [50.0010, 77.2540, 40.1370,  1.0000],
+          [48.8798, 77.2580, 41.1115,  1.0000],
+          [51.3621, 77.4165, 40.9482,  1.0000],
+
+        print(xyzs)
+        print(xyzs[...,:3])
+
 ```
