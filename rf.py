@@ -138,7 +138,7 @@ def make_ideal_RTs():
     xyzs_in_base_frame = torch.ones((NAATOKENS, NTOTAL,4))
     # torsion frames
     # RTs_in_base_frame
-    RTs_by_torsion = torch.eye(4).repeat(NAATOKENS, NTOTALTORS,1,1)
+    RTs_in_base_frame = torch.eye(4).repeat(NAATOKENS, NTOTALTORS,1,1)
 
     def make_frame(X, Y):
         """Process ideal frames
@@ -171,35 +171,36 @@ def make_ideal_RTs():
 
         # epsilon(p)/zeta(p) - like omega in protein, not used to build atoms
         #                    - keep as identity
-        RTs_by_torsion[i,0,:3,:3] = torch.eye(3)
-        #ic(RTs_by_torsion[i,0,:3,:3])
+        RTs_in_base_frame[i,0,:3,:3] = torch.eye(3)
+        #ic(RTs_in_base_frame[i,0,:3,:3])
 
-        RTs_by_torsion[i,0,:3,3] = torch.zeros(3)
-        RTs_by_torsion[i,1,:3,:3] = torch.eye(3)
-        RTs_by_torsion[i,1,:3,3] = torch.zeros(3)
+        RTs_in_base_frame[i,0,:3,3] = torch.zeros(3)
+        RTs_in_base_frame[i,1,:3,:3] = torch.eye(3)
+        RTs_in_base_frame[i,1,:3,3] = torch.zeros(3)
 
-        #ic(RTs_by_torsion)
+        #ic(RTs_in_base_frame)
         #ic(xyzs_in_base_frame[i,0,:3])
         # alpha
         #ic(xyzs_in_base_frame[i,3,:3] - xyzs_in_base_frame[i,1,:3])
         
-        RTs_by_torsion[i,2,:3,:3] = make_frame(
+        #makeframe
+        RTs_in_base_frame[i,2,:3,:3] = make_frame(
             xyzs_in_base_frame[i,3,:3] - xyzs_in_base_frame[i,1,:3], # P->O5'
             xyzs_in_base_frame[i,0,:3] - xyzs_in_base_frame[i,1,:3]  # P<-OP1
         )
         
-        #RTs_by_torsion[i,2,:3,:3]: tensor([[-0.3106, -0.6221, -0.7187],
+        #RTs_in_base_frame[i,2,:3,:3]: tensor([[-0.3106, -0.6221, -0.7187],
         #                           [-0.5373,  0.7386, -0.4071],
         #                           [ 0.7841,  0.2597, -0.5637]])
 
-        ic(RTs_by_torsion[i,2,:3,:3])
-        RTs_by_torsion[i,2,:3,3] = xyzs_in_base_frame[i,3,:3] # O5'
-        ic(RTs_by_torsion[i,2,:3,3])
-        ic(RTs_by_torsion.shape)
+        ic(RTs_in_base_frame[i,2,:3,:3])
+        RTs_in_base_frame[i,2,:3,3] = xyzs_in_base_frame[i,3,:3] # O5'
+        ic(RTs_in_base_frame[i,2,:3,3])
+        ic(RTs_in_base_frame.shape)
 
         ## rf.py:198 in make_ideal_RTs()
         ## torch.Size([5, 10, 4, 4])
-        ## RTs_by_torsion: tensor([[[[ 1.0000,  0.0000,  0.0000,  0.0000],
+        ## RTs_in_base_frame: tensor([[[[ 1.0000,  0.0000,  0.0000,  0.0000],
         ##                   [ 0.0000,  1.0000,  0.0000,  0.0000],
         ##                   [ 0.0000,  0.0000,  1.0000,  0.0000],
         ##                   [ 0.0000,  0.0000,  0.0000,  1.0000]],
@@ -219,54 +220,54 @@ def make_ideal_RTs():
             xyzs_in_base_frame[i,4,:3] , torch.tensor([-1.,0.,0.])
         )
 
-        RTs_by_torsion[i,3,:3,3] = xyzs_in_base_frame[i,4,:3] # C5' translation
-        ic(RTs_by_torsion)
+        RTs_in_base_frame[i,3,:3,3] = xyzs_in_base_frame[i,4,:3] # C5' translation
+        ic(RTs_in_base_frame)
  
         # gamma
-        RTs_by_torsion[i,4,:3,:3] = make_frame(
+        RTs_in_base_frame[i,4,:3,:3] = make_frame(
             xyzs_in_base_frame[i,5,:3] , torch.tensor([-1.,0.,0.])
         )
-        RTs_by_torsion[i,4,:3,3] = xyzs_in_base_frame[i,5,:3] # C4'
+        RTs_in_base_frame[i,4,:3,3] = xyzs_in_base_frame[i,5,:3] # C4'
 
         # delta
-        RTs_by_torsion[i,5,:3,:3] = make_frame(
+        RTs_in_base_frame[i,5,:3,:3] = make_frame(
             xyzs_in_base_frame[i,7,:3] , torch.tensor([-1.,0.,0.])
         )
-        RTs_by_torsion[i,5,:3,3] = xyzs_in_base_frame[i,7,:3] # C3'
+        RTs_in_base_frame[i,5,:3,3] = xyzs_in_base_frame[i,7,:3] # C3'
 
         # nu2
-        RTs_by_torsion[i,6,:3,:3] = make_frame(
+        RTs_in_base_frame[i,6,:3,:3] = make_frame(
             xyzs_in_base_frame[i,6,:3] , torch.tensor([-1.,0.,0.])
         )
-        RTs_by_torsion[i,6,:3,3] = xyzs_in_base_frame[i,6,:3] # O4'
+        RTs_in_base_frame[i,6,:3,3] = xyzs_in_base_frame[i,6,:3] # O4'
 
         # nu1
         C1idx,C2idx = 9,10
 
-        RTs_by_torsion[i,7,:3,:3] = make_frame(
+        RTs_in_base_frame[i,7,:3,:3] = make_frame(
             xyzs_in_base_frame[i,C1idx,:3] , torch.tensor([-1.,0.,0.])
         )
-        RTs_by_torsion[i,7,:3,3] = xyzs_in_base_frame[i,C1idx,:3] # C1'
+        RTs_in_base_frame[i,7,:3,3] = xyzs_in_base_frame[i,C1idx,:3] # C1'
 
         # nu0
-        RTs_by_torsion[i,8,:3,:3] = make_frame(
+        RTs_in_base_frame[i,8,:3,:3] = make_frame(
             xyzs_in_base_frame[i,C2idx,:3] , torch.tensor([-1.,0.,0.])
         )
-        RTs_by_torsion[i,8,:3,3] = xyzs_in_base_frame[i,C2idx,:3] # C2'
+        RTs_in_base_frame[i,8,:3,3] = xyzs_in_base_frame[i,C2idx,:3] # C2'
 
         # NA chi
         if torsions[i][0] is not None:
             a2 = torsion_indices[i,9,2]
-            RTs_by_torsion[i,9,:3,:3] = make_frame(
+            RTs_in_base_frame[i,9,:3,:3] = make_frame(
                 xyzs_in_base_frame[i,a2,:3] , torch.tensor([-1.,0.,0.])
             )
-            RTs_by_torsion[i,9,:3,3] = xyzs_in_base_frame[i,a2,:3] # N1/N9
+            RTs_in_base_frame[i,9,:3,3] = xyzs_in_base_frame[i,a2,:3] # N1/N9
 
     ic(base_indices)
-    ic(RTs_by_torsion)
+    ic(RTs_in_base_frame)
     ic(xyzs_in_base_frame)
     ic(torsion_indices)
-    return base_indices, RTs_by_torsion, xyzs_in_base_frame, torsion_indices
+    return base_indices, RTs_in_base_frame, xyzs_in_base_frame, torsion_indices
 
 def read_atoms(structure):
     """
@@ -520,7 +521,7 @@ class ComputeAllAtomCoords(torch.nn.Module):
         """
         super(ComputeAllAtomCoords, self).__init__()
         self.base_indices = nn.Parameter(base_indices, requires_grad=False) 
-        self.RTs_in_base_frame = nn.Parameter(RTs_by_torsion, requires_grad=False)
+        self.RTs_in_base_frame = nn.Parameter(RTs_in_base_frame, requires_grad=False)
         self.xyzs_in_base_frame = nn.Parameter(xyzs_in_base_frame, requires_grad=False) 
         self.listRs = np.array(listRs)
         self.listTs = np.array(listTs)
@@ -647,14 +648,14 @@ class ComputeAllAtomCoords(torch.nn.Module):
             # NA alpha O5'
             RTF1[seq_i,:,:] = torch.einsum(
                 'ij,jk,kl->il',
-            RTF0[seq_i,:,:], self.RTs_in_base_frame[s_i,2,:], make_rotX_chi(alphas[:,:,2,:],seq_i)) 
-
+            RTF0[seq_i,:,:], self.RTs_in_base_frame[s_i,2,:], make_rotX_chi(alphas[:,:,2,:], seq_i)) 
             if args.stop_artf == 1: continue
                 
             # NA beta 
             RTF2[seq_i,:,:] = torch.einsum(
                 'ij,jk,kl->il', 
                 RTF1[seq_i,:,:], self.RTs_in_base_frame[s_i,3,:], make_rotX_chi(alphas[:,:,3,:],seq_i))
+
             if args.stop_artf == 2: continue
 
             # NA gamma
@@ -943,7 +944,7 @@ if __name__ == '__main__':
     structure = sloppyparser.get_structure("", args.file) 
     print('Input:' + args.file)
 
-    base_indices, RTs_by_torsion, xyzs_in_base_frame, torsion_indices = make_ideal_RTs()
+    base_indices, RTs_in_base_frame, xyzs_in_base_frame, torsion_indices = make_ideal_RTs()
 
     listRs, listTs, seq_types, seq, seq_index = compute_backbone_frames(structure, frame=["OP1","P", "OP2", "OP1", "P","OP2"])
     xyzs_in = read_atoms(structure)
