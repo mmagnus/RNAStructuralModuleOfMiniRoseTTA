@@ -135,5 +135,12 @@ RTframes: tensor([[[[[-7.5478e-01, -3.1187e-01,  5.7710e-01,  5.0001e+01],
                      [ 0.0000e+00,  0.0000e+00,  0.0000e+00,  0.0000e+00],
                      [ 0.0000e+00,  0.0000e+00,  0.0000e+00,  0.0000e+00]]],
 
+        - base_indices = torch.full((5,34),0, dtype=torch.long) # base frame that builds each atom
+        - xyzs_in_base_frame = torch.ones((5,34,4)) # coords of each atom in the base frame
+        - RTs_in_base_frame = torch.eye(4).repeat(5,10,1,1) # torsion frames ( shape is 5,10,4,4 )
+        - seq_types: ['pur', 'pyr']
+        - seq: sequence as a list, e.g. ['G', 'C']
+        - seq_index: e.g., tensor([0, 1]) where A = 0, C = 1, G = 2, U = 3, X = 4
+
 
 ```
