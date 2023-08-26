@@ -216,7 +216,7 @@ def make_ideal_RTs():
         ##                   [ 0.0000,  0.0000,  0.0000,  1.0000]],
                 
         # beta
-        RTs_by_torsion[i,3,:3,:3] = make_frame(
+        RTs_in_base_frame[i,3,:3,:3] = make_frame(
             xyzs_in_base_frame[i,4,:3] , torch.tensor([-1.,0.,0.])
         )
 
