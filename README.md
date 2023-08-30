@@ -1,5 +1,6 @@
-# rf-structure-module
-Repository for RNA Structure Module (isolated from RosettaFoldNA), authors @Sid01123 @mmagnus
+# rf-structure-module -> MiniRoseTTA
+
+Repository for RNA Structure Module (isolated from MiniRoseTTAFoldNA), authors @Sid01123 @mmagnus
 
 This is an example:
 
