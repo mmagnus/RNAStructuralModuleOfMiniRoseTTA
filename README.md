@@ -1,4 +1,4 @@
-# rf-structure-module -> MiniRoseTTA
+# MiniRoseTTA
 
 (See also https://github.com/Sid01123/MiniRNAfold)
 
