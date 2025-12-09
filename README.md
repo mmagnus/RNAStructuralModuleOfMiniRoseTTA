@@ -1,6 +1,6 @@
 # MiniRoseTTA
 
-Repository for RNA Structure Module (isolated from MiniRoseTTAFoldNA), authors @Sid01123 @mmagnus
+Repository for RNA Structure Module (isolated from RoseTTAFoldNA), authors @Sid01123 @mmagnus
 
 This is an example:
 
