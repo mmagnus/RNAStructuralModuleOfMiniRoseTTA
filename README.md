@@ -1,7 +1,5 @@
 # MiniRoseTTA
 
-(See also https://github.com/Sid01123/MiniRNAfold)
-
 Repository for RNA Structure Module (isolated from MiniRoseTTAFoldNA), authors @Sid01123 @mmagnus
 
 This is an example:
